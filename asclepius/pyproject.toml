@@ -3,7 +3,7 @@ requires = ["setuptools>=42", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "asclepius"
+name = "hekate"
 version = "1.0.0"
 description = ""
 readme = "README.md"
@@ -26,11 +26,9 @@ classifiers = [
     "Topic :: Internet",
 ]
 dependencies = [
-    "requests>=2.20.0",
-    "packaging>=25.0",
-    "kronos>=1.0.2"
+    "kronos>=1.0.4"
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/devKaos117/Asclepius.py"
-"Bug Tracker" = "https://github.com/devKaos117/Asclepius.py/issues"
+"Homepage" = "https://github.com/devKaos117/Hekate.py"
+"Bug Tracker" = "https://github.com/devKaos117/Hekate.py/issues"

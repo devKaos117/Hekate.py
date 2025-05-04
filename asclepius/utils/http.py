@@ -1,22 +1,18 @@
-"""
-HTTP Client Module
-
-A flexible HTTP client with built-in retry, timeout, and rate limiting capabilities
-Buil-in usage of Kronos.py
-"""
-import kronos, configuration, time, requests, random
+import time, requests, random
 from typing import Dict, Any, Optional
+
+import kronos # https://github.com/devKaos117/Kronos.py
+from . import configuration # https://github.com/devKaos117/Utils.py/blob/main/utils/configuration.py
 
 
 class HTTPy:
     """
-    A flexible HTTP client with support for retries, timeout management, and rate limiting
-    
-    This client provides a reliable way to make HTTP requests with built-in handling for
-    common failure scenarios and configuration options
+    HTTPy
+
+    A flexible HTTP client with built-in retry, timeout, and rate limiting capabilities
+    Buil-in usage of Kronos.py and utils/configuration
     """
 
-    # A list of modern user agent strings from various browsers and platforms
     _USER_AGENTS = [
         # Chrome on Windows
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -43,54 +39,62 @@ class HTTPy:
         # Firefox on Android
         "Mozilla/5.0 (Android 12; Mobile; rv:122.0) Gecko/122.0 Firefox/122.0",
     ]
-    
-    def __init__(self, config: Dict[str, Any], logger: Optional[kronos.Logger] = None, rate_limiter: Optional[kronos.RateLimiter] = None):
+
+    _DEFAULT_CONFIG = {
+        "randomize-agent": True,
+        "max-retries": 3,
+        "retry_status_codes": [429, 500, 502, 503, 504],
+        "success_status_codes": [200, 201, 202, 203, 204, 205, 206, 207, 208],
+        "timeout": 10,
+        "headers": {
+            "Accept": "text/html,application/xhtml+xml,application/xml,application/json",
+            "Accept-Language": "en-US,en,pt-BR,pt",
+            "Cache-Control": "no-cache"
+        }
+    }
+
+    def __init__(self, logger: Optional[kronos.Logger] = None, config: Optional[Dict[str, Any]] = {}, rate_limiter: Optional[kronos.RateLimiter] = None):
         """
         Initialize the HTTP client with the provided configuration
-        
+
         Args:
             config: Configuration dictionary following https://github.com/devKaos117/Utils.py/blob/main/documentation/schema/http.schema.json
-                - max_retries (int): Maximum number of retry attempts for failed requests
-                - retry_status_codes (List[int]): HTTP status codes that should trigger a retry
-                - timeout (int): Request timeout in seconds
-                - headers (Dict[str, str]): Default headers for all requests
             logger: kronos.Logger instance to use
         """
-        default_config = {
-            "max-retries": 3,
-            "retry_status_codes": [403, 429, 500, 502, 503, 504],
-            "success_status_codes": [200, 201, 202, 203, 204, 205, 206, 207, 208],
-            "timeout": 10,
-            "headers": {}
-        }
+        if logger:
+            self._logger = logger
+        else:
+            self._logger = kronos.Logger("none")
 
-        self._config = configuration.import_config(config, default_config)
-        self._logger = logger
+        self._config = configuration.import_config(config, self._DEFAULT_CONFIG)
         self._rate_limiter = rate_limiter
         self._session = self._create_session()
-    
+
+        self._logger.info("HTTPy client initialized")
+        self._logger.debug("HTTPy client settings", self._config)
+
     def _create_session(self) -> requests.Session:
         """
         Create and configure a requests Session with retry capabilities
-        
+
         Returns:
             requests.Session: Configured session object
         """
         session = requests.Session()
-        
+
         # Set default headers
         session.headers = self._config['headers']
-        self._logger.info("Session initialized")
-        
+        self._logger.debug("Session initialized")
+
         return session
-    
+
     def _execute_request(self, method: str, url: str, **kwargs) -> Optional[requests.Response]:
         """
         Execute an HTTP request with the given method and parameters
-        
+
         Args:
-            method (str): HTTP method
-            url (str): URL to send the request to
+            method: HTTP method
+            url: URL to send the request to
             **kwargs: Additional arguments to pass to the request
 
         Returns:
@@ -99,28 +103,35 @@ class HTTPy:
         # Apply default timeout if not specified in kwargs
         if 'timeout' not in kwargs:
             kwargs['timeout'] = self._config['timeout']
-            
+
         # Merge default headers with any provided in kwargs
         if 'headers' in kwargs:
             merged_headers = configuration.deep_merge(kwargs['headers'], self._config['headers'].copy())
             kwargs['headers'] = merged_headers
-        
+
         # Make requests
         response = None
         retries = 0
 
-        while retries < self._config["max-retries"]:
+        while retries <= self._config["max-retries"]:
             # Apply rate limiting if enabled
             if self._rate_limiter:
                 self._rate_limiter.acquire()
             try:
-                self._session.headers.update({"User-Agent": self._get_random_agent()})
+                if self._config["randomize-agent"]:
+                    self._session.headers.update({"User-Agent": self._get_random_agent()})
+
                 response = self._session.request(method, url, **kwargs)
+                
                 # Handle different status codes
+                self._handle_response_status(response)
+
+                # Stop retries if successful
                 if response.status_code in self._config["success_status_codes"]:
+                    break    
+                # Stop retries if not configured to repeat
+                if response.status_code not in self._config["retry_status_codes"]:
                     break
-                else: 
-                    self._handle_response_status(response)
             except requests.RequestException as e:
                 self._logger.exception(f"Network error making request: {str(e)}")
                 self._logger.log_http_response(response)
@@ -128,20 +139,20 @@ class HTTPy:
                 self._logger.exception(f"Error making request: {str(e)}")
                 self._logger.log_http_response(response)
                 time.sleep(1)
-            
+
             retries += 1
-        
+
         if response is None or response.status_code not in self._config["success_status_codes"]:
-            self._logger.error(f"HTTP request failed after {retries - 1} retries")
+            self._logger.error(f"HTTP request failed after {retries - 1 if retries > 0 else 0} retries")
         else:
             self._logger.log_http_response(response)
-        
+
         return response
-    
+
     def _handle_response_status(self, response: requests.Response) -> None:
         """
         Handle the response based on its status code
-        
+
         Args:
             response (requests.Response): The response to handle
         """
@@ -149,7 +160,7 @@ class HTTPy:
             self._logger.log_http_response(response)
         elif 400 <= response.status_code < 500:
             self._logger.error(f"Client error: {response.status_code} - {response.text}")
-            
+
             if response.status_code == 401:
                 self._logger.error("Authentication error: Check credentials")
             elif response.status_code == 403:
@@ -166,17 +177,44 @@ class HTTPy:
     def _get_random_agent(self) -> str:
         """Get a random user agent from the list"""
         return random.choice(self._USER_AGENTS)
-    
-    def get(self, url: str, params: Optional[Dict[str, Any]] = None, **kwargs) -> requests.Response:
+
+    def get(self, url: str, params: Optional[Dict[str, Any]] = {}, **kwargs) -> requests.Response:
         """
         Send a GET request to the specified URL
-        
+
         Args:
             url : URL to send the request to
             params : Query parameters for the request
             **kwargs: Additional arguments to pass to the request
-            
+
         Returns:
             requests.Response: Response from the server
         """
         return self._execute_request("GET", url, params=params, **kwargs)
+
+    def post(self, url: str, data: Optional[Any] = None, json: Optional[Dict[str, Any]] = None,**kwargs) -> requests.Response:
+        """
+        Send a POST request to the specified URL
+
+        Args:
+            url: URL to send the request to
+            data: Data to send in the request body
+            json: JSON data to send in the request body
+            **kwargs: Additional arguments to pass to the request
+
+        Returns:
+            requests.Response: Response from the server
+        """
+        return self._execute_request("POST", url, data=data, json=json, **kwargs)
+
+    def close(self) -> None:
+        """Close the session and release resources."""
+        self._session.close()
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit that ensures session closure."""
+        self.close()

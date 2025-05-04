@@ -1,14 +1,14 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="asclepius",
+    name="hekate",
     version="1.0.0",
     author="Gustavo Aragão",
     author_email="gustavo.s.aragao.2003@gmail.com",
     description="",
     long_description="",
     long_description_content_type="text/markdown",
-    url="https://github.com/devKaos117/Asclepius.py",
+    url="https://github.com/devKaos117/Hekate.py",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

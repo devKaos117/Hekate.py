@@ -1,5 +1,5 @@
 """
-Asclepius - 
+Hekate - 
 """
 
 __version__ = "1.0.0"

@@ -4,9 +4,10 @@ Arch Method - Abstract base class for version checking strategies
 This module defines the ArchMethod abstract class that all concrete
 version checking strategies should inherit from
 """
-import kronos
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
+
+import kronos
 
 
 class ArchMethod(ABC):

@@ -1,12 +1,14 @@
 """
 """
-import kronos, os, importlib, inspect
+import os, importlib, inspect
 from typing import Dict, List, Any, Optional
-from .utils import configuration
+
+import kronos
 
 from .methods.archmethod import ArchMethod
 from . import methods as methods_pkg
 from .utils import version
+from .utils import configuration
 
 
 class UpdateFinder:
