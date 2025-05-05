@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlparse
 
 from bs4 import BeautifulSoup
 
+from .version import VersionCheck
 
 def extract_text_around_version(soup: BeautifulSoup, search_term: str, context_chars: int = 100) -> List[str]:
     """
@@ -78,12 +79,11 @@ def extract_version_from_header(soup: BeautifulSoup) -> Optional[str]:
     Returns:
         Version string if found, None otherwise
     """
-    from ..utils.version_parser import extract_version_numbers
     
     for header_tag in ["h1", "h2", "h3"]:
         for header in soup.find_all(header_tag):
             header_text = header.get_text(strip=True)
-            versions = extract_version_numbers(header_text)
+            versions = VersionCheck.extract(header_text)
             if versions:
                 return versions[0]
     
@@ -104,16 +104,10 @@ def find_download_links(soup: BeautifulSoup, base_url: str) -> List[Tuple[str, s
     download_links = []
     
     # Keywords that suggest a download link
-    download_keywords = [
-        "download", "get", "install", "setup",
-        "binary", "executable", "latest", "stable"
-    ]
+    download_keywords = ["download", "get", "install", "setup","binary", "executable", "latest", "stable"]
     
     # File extensions that suggest software downloads
-    download_extensions = [
-        ".exe", ".msi", ".dmg", ".pkg", ".rpm", ".deb",
-        ".zip", ".tar.gz", ".tar.xz", ".appimage"
-    ]
+    download_extensions = [".exe", ".msi", ".dmg", ".pkg", ".rpm", ".deb",".zip", ".tar.gz", ".tar.xz", ".appimage"]
     
     for a_tag in soup.find_all("a", href=True):
         href = a_tag["href"]
