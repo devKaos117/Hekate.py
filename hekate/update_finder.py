@@ -5,30 +5,48 @@ from typing import Dict, List, Any, Optional
 
 import kronos
 
-from .methods.archmethod import ArchMethod
 from . import methods as methods_pkg
+from .methods.archmethod import ArchMethod
 from .utils import version
 from .utils import configuration
 
 
 class UpdateFinder:
-    def __init__(self, logger: kronos.Logger, rate_limiter: kronos.RateLimiter = None, config: Dict[str, Any] = None):
-        """"""
-        default_config = {
-            "http": {
-                "headers": {
-                    "Accept": "text/html,application/xhtml+xml,application/xml",
-                    "Accept-Language": "en-US, en",
-                    "Referer": "https://www.google.com/",
-                    "DNT": "1"
-                },
-                "max-retries": 3,
-                "timeout": 10
+    
+    _DEFAULT_CONFIG = {
+        "methods": ["google", "wikipedia", "cve_details", "provider"],
+        "httpy": {
+            "randomize-agent": True,
+            "max-retries": 3,
+            "retry_status_codes": [429, 500, 502, 503, 504],
+            "success_status_codes": [200, 201, 202, 203, 204, 205, 206, 207, 208],
+            "timeout": 10,
+            "headers": {
+                "Accept": "text/html,application/xhtml+xml,application/xml,application/json",
+                "Accept-Language": "en-US,en,pt-BR,pt",
+                "Cache-Control": "no-cache",
+                "Referer": "https://www.google.com/",
+                "DNT": "1"
             }
         }
+    }
+
+    def __init__(self, logger: kronos.Logger, rate_limiter: Optional[kronos.RateLimiter] = None, config: Optional[Dict[str, Any]] = None):
+        """
+        Initialize UpdateFinder
+
+        Args:
+            logger: kronos.Logger instance
+            rate_limiter: kronos.RateLimiter instance
+            config: Configurations dictionary following https://github.com/devKaos117/Hekate.py/blob/main/documentation/schema/config.schema.json
+        """
         self._logger = logger
         self._rate_limiter = rate_limiter
-        self._config = configuration.import_config(config, default_config)
+        self._config = configuration.import_config(config, self._DEFAULT_CONFIG)
+
+        self._load_methods(self._config['methods'])
+        self._logger.debug("UpdateFinder config", self._config)
+        self._logger.info("UpdateFinder initialized")
     
     def _load_methods(self, methods_names: Optional[List[str]] = None):
         """
@@ -53,12 +71,12 @@ class UpdateFinder:
                 
                 # Import the module
                 try:
-                    module = importlib.import_module(f'.methods.{module_name}', package=__package__)
+                    module = importlib.import_module(f".methods.{module_name}", package=__package__)
                     
                     # Find all classes in the module that inherit from ArchMethod
                     for name, obj in inspect.getmembers(module, inspect.isclass):
-                        if (issubclass(obj, ArchMethod) and obj.__module__ == module.__name__ and name != 'ArchMethod'):
-                            self._methods.append(self._config, self._rate_limiter)
+                        if (issubclass(obj, ArchMethod) and obj.__module__ == module.__name__ and name != "ArchMethod"):
+                            self._methods.append(obj(self._config, self._rate_limiter))
                             self._logger.debug(f"Loaded method: {name}")
                 
                 except (ImportError, AttributeError) as e:
@@ -73,20 +91,10 @@ class UpdateFinder:
             current_version: Optional string with the currently installed version
         
         Returns:
-            A dictionary containing version information or None
-            {
-                'current_version': Current version (if provided),
-                'latest_version': Latest version found,
-                'update_found': Boolean indicating if update is available,
-                'download_url': URL to download the latest version (if available),
-                'release_date': Release date of the latest version (if available),
-                'source': Name of the strategy that provided the result
-            }
+            A dictionary containing version information or None, following https://github.com/devKaos117/Hekate.py/blob/main/documentation/schema/version.schema.json
         """
-        self._logger.info(f"Checking latest version for {software_name}")
-        
         results = []
-        
+        self._logger.info(f"Searching for update to {software_name}")
         # Execute each strategy and collect results
         for method in self._methods:
             try:
@@ -94,9 +102,10 @@ class UpdateFinder:
                     continue
                 
                 result = method.get_version(software_name)
+
                 if result and result.get('latest_version'):
                     results.append(result)
-                    self._logger.info(f"Found version {result['latest_version']} via {method.__class__.__name__}")
+                    self._logger.debug(f"Found version {result['latest_version']} via {method.__class__.__name__}")
             except Exception as e:
                 self._logger.exception(f"Error in method {method.__class__.__name__}: {e}")
         
@@ -107,15 +116,11 @@ class UpdateFinder:
         best_result = results[0]
         
         for result in results[1:]:
-            if version.compare_versions(result['latest_version'], best_result['latest_version']) > 0:
+            if version.compare(result['latest_version'], ">", best_result['latest_version']):
                 best_result = result
         
         # Determine if an update is available
-        if current_version and best_result['latest_version']:
-            best_result['current_version'] = current_version
-            best_result['update_found'] = version.compare(best_result['latest_version'], current_version) > 0
-        else:
-            best_result['current_version'] = current_version
-            best_result['update_found'] = False
+        best_result['current_version'] = current_version
+        best_result['update_found'] = version.compare(best_result['latest_version'], ">", current_version)
         
         return best_result

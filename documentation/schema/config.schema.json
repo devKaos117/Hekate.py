@@ -1,0 +1,18 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://github.com/devKaos117/Hekate.py/blob/main/documentation/schema/config.schema.json",
+    "title": "UpdateFinder config",
+    "description": "A dictionary with the configurations for an UpdateFinder instance",
+    "type": "object",
+    "properties":{
+        "methods": {
+            "description": "List of methods to load",
+            "enum": ["google", "wikipedia", "cve_details", "provider"]
+        },
+        "httpy": {
+            "description": "Configuration for the HTTPy client",
+            "type": "object",
+            "$ref": "https://github.com/devKaos117/Utils.py/blob/main/documentation/schema/http.schema.json"
+        }
+    }
+}

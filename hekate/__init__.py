@@ -4,4 +4,6 @@ Hekate -
 
 __version__ = "1.0.0"
 
-__all__ = []
+from .update_finder import UpdateFinder
+
+__all__ = ["UpdateFinder"]
