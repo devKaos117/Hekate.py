@@ -10,14 +10,14 @@ from typing import Dict
 from bs4 import BeautifulSoup
 
 from .archmethod import ArchMethod
-from ..utils.version import extract_version_numbers
+from ..utils.version import VersionCheck
 
 
-class GoogleStrategy(ArchMethod):
+class GoogleMethod(ArchMethod):
     """
-    Strategy for finding software versions using Google search
+    Method for finding software versions using Google search
     
-    This strategy performs a Google search for the software name along with terms
+    This method performs a Google search for the software name along with terms
     like "latest version" and parses the search results to find version information
     """
     
@@ -41,83 +41,87 @@ class GoogleStrategy(ArchMethod):
             software_name: The common name of the software
             
         Returns:
-            A dictionary containing version information
+            A dictionary containing version information following https://github.com/devKaos117/Hekate.py/blob/main/documentation/schema/version.schema.json
         """
         result = {
-            'latest_version': None,
-            'download_url': None,
-            'release_date': None,
-            'source': 'GoogleStrategy'
+            "current_version": None,
+            "latest_version": None,
+            "update_found": False,
+            "source_url": None,
+            "release_date": None,
+            "method": "google"
         }
         
         # Craft search query
         search_terms = [
             f"{software_name} latest version",
             f"{software_name} current version",
+            f"{software_name} changelog",
             f"{software_name} download latest version"
         ]
         
-        versions = set()
-        download_urls = set()
+        versions = []
+        source_urls = []
         
-        for search_term in search_terms:
+        for search_term in search_terms[:3]:
             try:
                 url = f"https://www.google.com/search?q={search_term.replace(' ', '+')}"
-                response = self.checker.make_request(url)
+                response = self._client.get(url)
                 
                 if not response:
                     continue
                 
-                soup = BeautifulSoup(response.text, 'html.parser')
+                soup = BeautifulSoup(response.text, "html.parser")
                 
                 # Extract possible version numbers from search results
-                search_results = soup.select('.g')
+                search_results = soup.find_all(class_="MjjYud")
                 
                 for item in search_results:
                     # Extract text from title and snippet
-                    title_elem = item.select_one('h3')
-                    snippet_elem = item.select_one('.VwiC3b')
+                    title_elem = item.select_one("h3")
+                    snippet_elem = item.find(class_="VwiC3b")
                     
                     if title_elem:
                         title_text = title_elem.get_text()
-                        title_versions = extract_version_numbers(title_text)
-                        versions.update(title_versions)
+                        title_versions = VersionCheck.extract(title_text)
+                        versions.append(title_versions)
                     
                     if snippet_elem:
                         snippet_text = snippet_elem.get_text()
-                        snippet_versions = extract_version_numbers(snippet_text)
-                        versions.update(snippet_versions)
+                        snippet_versions = VersionCheck.extract(snippet_text)
+                        versions.append(snippet_versions)
                     
                     # Extract download URL if present
-                    link_elem = item.select_one('a')
-                    if link_elem and 'href' in link_elem.attrs:
-                        link = link_elem['href']
-                        if 'download' in link.lower() and software_name.lower() in link.lower():
-                            download_urls.add(link)
+                    link_elem = item.select_one("a")
+                    link_keywords = ["download", "updates", "changelog", "release", software_name.lower()]
+
+                    if link_elem and "href" in link_elem.attrs:
+                        link = link_elem["href"]
+                        if any(keyword in link.lower() for keyword in link_keywords):
+                            source_urls.append(link)
                 
                 # Look for "featured snippet" which often contains the latest version
-                featured_snippet = soup.select_one('.hgKElc')
+                featured_snippet = soup.select_one(".hgKElc")
                 if featured_snippet:
                     snippet_text = featured_snippet.get_text()
-                    snippet_versions = extract_version_numbers(snippet_text)
-                    versions.update(snippet_versions)
+                    snippet_versions = VersionCheck.extract(snippet_text)
+                    versions.append(snippet_versions)
+                    
                 
             except Exception as e:
-                self.checker.logger.warning(
-                    f"Error searching Google for {software_name}: {str(e)}")
+                self._logger.warning(f"Error searching Google for {software_name}: {str(e)}")
         
         # Find the highest version number from all the versions we collected
         if versions:
-            from ..utils.version_parser import compare_versions
-            latest_version = sorted(versions, key=lambda v: compare_versions("0", v))[0]
-            for version in versions:
-                if compare_versions(version, latest_version) > 0:
-                    latest_version = version
+            latest_version = versions[0]
+            for ver in versions:
+                if VersionCheck.compare(ver, ">", latest_version ):
+                    latest_version = ver
             
-            result['latest_version'] = latest_version
+            result["latest_version"] = latest_version
         
         # Add a download URL if we found one
-        if download_urls:
-            result['download_url'] = list(download_urls)[0]
+        if source_urls:
+            result["source_url"] = list(source_urls)[0]
         
         return result

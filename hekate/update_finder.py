@@ -9,6 +9,7 @@ from . import methods as methods_pkg
 from .methods.archmethod import ArchMethod
 from .utils import version
 from .utils import configuration
+from .utils.http import HTTPy
 
 
 class UpdateFinder:
@@ -43,11 +44,21 @@ class UpdateFinder:
         self._logger = logger
         self._rate_limiter = rate_limiter
         self._config = configuration.import_config(config, self._DEFAULT_CONFIG)
+        self._client = self._create_client()
 
         self._load_methods(self._config['methods'])
         self._logger.debug("UpdateFinder config", self._config)
         self._logger.info("UpdateFinder initialized")
     
+    def _create_client(self) -> HTTPy:
+        """
+        Create and configure a HTTPy client with API key.
+        
+        Returns:
+            Configured HTTPy instance
+        """
+        return HTTPy(self._logger, self._config["httpy"], self._rate_limiter)
+
     def _load_methods(self, methods_names: Optional[List[str]] = None):
         """
         Load all available methods
@@ -76,7 +87,7 @@ class UpdateFinder:
                     # Find all classes in the module that inherit from ArchMethod
                     for name, obj in inspect.getmembers(module, inspect.isclass):
                         if (issubclass(obj, ArchMethod) and obj.__module__ == module.__name__ and name != "ArchMethod"):
-                            self._methods.append(obj(self._config, self._rate_limiter))
+                            self._methods.append(obj(self._logger, self._client))
                             self._logger.debug(f"Loaded method: {name}")
                 
                 except (ImportError, AttributeError) as e:
@@ -113,14 +124,10 @@ class UpdateFinder:
             self._logger.warning(f"No version information found")
             return None
         
-        best_result = results[0]
-        
-        for result in results[1:]:
-            if version.compare(result['latest_version'], ">", best_result['latest_version']):
-                best_result = result
+        best_result = version.VersionCheck.find_higher(results)
         
         # Determine if an update is available
         best_result['current_version'] = current_version
-        best_result['update_found'] = version.compare(best_result['latest_version'], ">", current_version)
+        best_result['update_found'] = version.VersionCheck.compare(best_result['latest_version'], ">", current_version)
         
         return best_result

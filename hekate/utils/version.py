@@ -1,13 +1,51 @@
 import re
 from packaging import version
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 
 class VersionCheck:
 
-    _PATTERN =  r"(\d+(?:(?:\.\d+){0,2})(?:(?:\.\*)|(?:\.\d+))?)((?:[a-zA-Z]{1}|\*)|(?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+|\*)))?" # Match any version string in groups (major.minor.patch.build)(suffix), with or without wildcards
-    _PATTERN_SPECIFIC = r"(\d+(?:\.\d+){0,3})((?:[a-zA-Z]{1})|(?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+)))?" # Match any version string in groups (major.minor.patch.build)(suffix) without wildcards
-    _SUPPORTED_COMPARISONS = ["<", "<=", "==", ">=", ">"]
+    # Pattern for matching version strings with possible wildcards
+    # Format: major.minor.patch.build + optional suffix
+    _PATTERN =  r"(\d+(?:(?:\.\d+){0,2})(?:(?:\.\*)|(?:\.\d+))?)((?:[a-zA-Z]{1}|\*)|(?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+|\*)))?"
+    # Components:
+    # 1. (\d+(?:(?:\.\d+){0,2})(?:(?:\.\*)|(?:\.\d+))?) - Version numbers group:
+    #   - \d+ : Starts with one or more digits (major version)
+    #   - (?:(?:\.\d+){0,2}) : Followed by 0-2 occurrences of dot + digits (minor.patch)
+    #   - (?:(?:\.\*)|(?:\.\d+))? : Optional final component that can be .* or .digits (build)
+    # 
+    # 2. ((?:[a-zA-Z]{1}|\*)|(?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+|\*)))? - Optional suffix group:
+    #   - (?:[a-zA-Z]{1}|\*) : Single letter suffix or wildcard
+    #   - OR
+    #   - (?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+|\*)) : Delimiter followed by alphanumeric suffix or wildcard
+    
+    # Pattern for matching specific version strings without wildcards
+    # Format: major.minor.patch.build + optional suffix
+    _EXTRACTION_PATTERNS = [
+        r"(\d+(?:\.\d+){3})((?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+))",
+        r"(\d+(?:\.\d+){2})((?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+))",
+        r"(\d+(?:\.\d+){1})((?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+))",
+        r"(\d+)((?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+))",
+        r"(\d+(?:\.\d+){3})([a-zA-Z]{1})",
+        r"(\d+(?:\.\d+){2})([a-zA-Z]{1})",
+        r"(\d+(?:\.\d+){1})([a-zA-Z]{1})",
+        r"(\d+)([a-zA-Z]{1})",
+        r"(\d+(?:\.\d+){3})",
+        r"(\d+(?:\.\d+){2})",
+        r"(\d+(?:\.\d+){1})",
+        r"(\d+)"
+    ]
+    # Components:
+    # 1. (\d+(?:\.\d+){0,3}) - Version numbers group:
+    #   - \d+ : Starts with one or more digits (major version)
+    #   - (?:\.\d+){0,3} : Followed by 0-3 occurrences of dot + digits (minor.patch.build)
+    # 
+    # 2. ((?:[a-zA-Z]{1})|(?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+))) - Suffix group:
+    #   - (?:[a-zA-Z]{1}) : Single letter suffix
+    #   - OR
+    #   - (?:(?:-|_|\+)(?:[a-zA-Z0-9_\-\+]+)) : Delimiter followed by alphanumeric suffix
 
+    _SUPPORTED_COMPARISONS = ["<", "<=", "==", ">=", ">"]
+    
     @staticmethod
     def is_valid(v: str) -> bool:
         """
@@ -23,7 +61,7 @@ class VersionCheck:
         return True if re.match(f"^{VersionCheck._PATTERN}$", v) else False
     
     @staticmethod
-    def extract(str: str) -> List[str]:
+    def extract(str: str) -> Optional[str]:
         """
         Extract version strings
 
@@ -31,9 +69,36 @@ class VersionCheck:
             str: Source string
         
         Returns:
-            List of found version strings
+            Best version found
         """
-        return re.findall(VersionCheck._PATTERN_SPECIFIC, str)
+        for pattern in VersionCheck._EXTRACTION_PATTERNS:
+            version = VersionCheck.find_higher(re.findall(pattern, str))
+
+            if version:
+                return version
+        
+        return None
+
+    @staticmethod
+    def find_higher(versions: List[str]) -> Optional[str]:
+        """
+        Return highest version found in a list
+
+        Args:
+            versions: Versions list
+        
+        Returns:
+            Best version found
+        """
+        v = "0"
+
+        for ver in versions:
+            if not VersionCheck.is_valid(ver):
+                continue
+
+            v = ver if VersionCheck.compare(ver, ">", v) else v
+        
+        return v if v != "0" else None
 
     @staticmethod
     def _execute_comparison(a, op, b) -> bool:

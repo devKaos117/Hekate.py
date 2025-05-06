@@ -5,9 +5,11 @@ This module defines the ArchMethod abstract class that all concrete
 version checking strategies should inherit from
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 import kronos
+
+from ..utils.http import HTTPy
 
 
 class ArchMethod(ABC):
@@ -18,15 +20,15 @@ class ArchMethod(ABC):
     implement its abstract methods
     """
     
-    def __init__(self, config: Dict[str, Any] = None, rate_limiter: Optional[kronos.RateLimiter] = None):
+    def __init__(self, logger: kronos.Logger, client: HTTPy):
         """
         Initialize the strategy with the configurations dictionary and a RateLimiter
         
         Args:
             rate_limiter: The RateLimiter instance
         """
-        if rate_limiter:
-            self._rate_limiter = rate_limiter
+        self._logger = logger
+        self._client = client
     
     @abstractmethod
     def can_handle(self, software_name: str) -> bool:
@@ -42,7 +44,7 @@ class ArchMethod(ABC):
         pass
     
     @abstractmethod
-    def get_version(self, software_name: str) -> Dict:
+    def get_version(self, software_name: str) -> Dict[str, Any]:
         """
         Get the latest version information for the software
         
@@ -50,12 +52,6 @@ class ArchMethod(ABC):
             software_name: The common name of the software
             
         Returns:
-            A dictionary containing version information:
-            {
-                'latest_version': Latest version found,
-                'download_url': URL to download the latest version (if available),
-                'release_date': Release date of the latest version (if available),
-                'source': Name of the strategy that provided the result
-            }
+            A dictionary containing version information following https://github.com/devKaos117/Hekate.py/blob/main/documentation/schema/version.schema.json
         """
         pass
