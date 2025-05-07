@@ -106,7 +106,7 @@ class UpdateFinder:
         """
         results = []
         self._logger.info(f"Searching for update to {software_name}")
-        # Execute each strategy and collect results
+        # Execute each method and collect results
         for method in self._methods:
             try:
                 if not method.can_handle(software_name):

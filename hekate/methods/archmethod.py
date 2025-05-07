@@ -22,7 +22,7 @@ class ArchMethod(ABC):
     
     def __init__(self, logger: kronos.Logger, client: HTTPy):
         """
-        Initialize the strategy with the configurations dictionary and a RateLimiter
+        Initialize the method with the configurations dictionary and a RateLimiter
         
         Args:
             rate_limiter: The RateLimiter instance
@@ -33,13 +33,13 @@ class ArchMethod(ABC):
     @abstractmethod
     def can_handle(self, software_name: str) -> bool:
         """
-        Determine if this strategy can handle the given software
+        Determine if this method can handle the given software
         
         Args:
             software_name: The common name of the software
             
         Returns:
-            True if this strategy can handle the software, False otherwise
+            True if this method can handle the software, False otherwise
         """
         pass
     

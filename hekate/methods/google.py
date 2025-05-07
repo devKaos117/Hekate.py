@@ -1,11 +1,10 @@
 """
 Google Strategy - Search for software versions using Google search
 
-This module provides a strategy for finding software version information
+This module provides a method for finding software version information
 by parsing Google search results
 """
-
-from typing import Dict
+from typing import Dict, Any
 
 from bs4 import BeautifulSoup
 
@@ -23,7 +22,7 @@ class GoogleMethod(ArchMethod):
     
     def can_handle(self, software_name: str) -> bool:
         """
-        This strategy can handle any software
+        This method can handle any software
         
         Args:
             software_name: The common name of the software
@@ -33,7 +32,7 @@ class GoogleMethod(ArchMethod):
         """
         return True
     
-    def get_version(self, software_name: str) -> Dict:
+    def get_version(self, software_name: str) -> Dict[str, Any]:
         """
         Get the latest version by searching Google
         
